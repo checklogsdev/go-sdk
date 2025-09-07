@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"checklogs"
+	"github.com/checklogsdev/go-sdk"
 )
 
 func main() {
