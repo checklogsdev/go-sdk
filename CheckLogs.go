@@ -117,9 +117,117 @@ func NewLogger(apiKey string, opts *Options) *Logger {
 	}
 }
 
+// NewLoggerWithValidation creates a new CheckLogs logger and validates the API key
+func NewLoggerWithValidation(apiKey string, opts *Options) (*Logger, error) {
+	logger := NewLogger(apiKey, opts)
+	
+	// Valider la clé API si elle est fournie
+	if apiKey != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		
+		if err := logger.ValidateAPIKey(ctx); err != nil {
+			return nil, fmt.Errorf("API key validation failed: %w", err)
+		}
+	}
+	
+	return logger, nil
+}
+
 // CreateLogger is a convenience function to create a logger with minimal config
 func CreateLogger(apiKey string) *Logger {
 	return NewLogger(apiKey, nil)
+}
+
+// CreateLoggerWithValidation is a convenience function to create and validate a logger
+func CreateLoggerWithValidation(apiKey string) (*Logger, error) {
+	return NewLoggerWithValidation(apiKey, nil)
+}
+
+// ValidateAPIKey validates the API key by making a test request
+func (l *Logger) ValidateAPIKey(ctx context.Context) error {
+	if l.apiKey == "" {
+		return &CheckLogsError{Type: "ConfigurationError", Message: "API key is required"}
+	}
+
+	// Test avec une requête de validation
+	req, err := http.NewRequestWithContext(ctx, "GET", l.options.BaseURL+"/api/validate", nil)
+	if err != nil {
+		return &CheckLogsError{Type: "NetworkError", Message: "Cannot create validation request: " + err.Error()}
+	}
+
+	req.Header.Set("Authorization", "Bearer "+l.apiKey)
+	req.Header.Set("User-Agent", "CheckLogs-Go-SDK/"+Version)
+
+	resp, err := l.httpClient.Do(req)
+	if err != nil {
+		return &CheckLogsError{Type: "NetworkError", Message: "Cannot reach CheckLogs API: " + err.Error()}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		return &CheckLogsError{Type: "AuthenticationError", Message: "Invalid API key", Code: 401}
+	}
+	
+	if resp.StatusCode == 403 {
+		return &CheckLogsError{Type: "AuthorizationError", Message: "API key does not have required permissions", Code: 403}
+	}
+	
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return &CheckLogsError{Type: "APIError", Message: fmt.Sprintf("API validation failed (HTTP %d): %s", resp.StatusCode, string(body)), Code: resp.StatusCode}
+	}
+
+	return nil
+}
+
+// GetStatus returns the current status of the logger and API connection
+func (l *Logger) GetStatus(ctx context.Context) (map[string]interface{}, error) {
+	status := map[string]interface{}{
+		"api_key_present":  l.apiKey != "",
+		"retry_queue_size": l.GetRetryQueueSize(),
+		"base_url":         l.options.BaseURL,
+		"api_reachable":    false,
+		"api_key_valid":    false,
+		"sdk_version":      Version,
+	}
+
+	if l.apiKey == "" {
+		status["error"] = "No API key provided"
+		return status, nil
+	}
+
+	// Test de connectivité
+	req, err := http.NewRequestWithContext(ctx, "GET", l.options.BaseURL+"/api/status", nil)
+	if err != nil {
+		status["error"] = "Cannot create request: " + err.Error()
+		return status, nil
+	}
+
+	req.Header.Set("Authorization", "Bearer "+l.apiKey)
+	req.Header.Set("User-Agent", "CheckLogs-Go-SDK/"+Version)
+
+	resp, err := l.httpClient.Do(req)
+	if err != nil {
+		status["error"] = "Cannot reach API: " + err.Error()
+		return status, nil
+	}
+	defer resp.Body.Close()
+
+	status["api_reachable"] = true
+
+	if resp.StatusCode == 200 {
+		status["api_key_valid"] = true
+	} else if resp.StatusCode == 401 {
+		status["error"] = "Invalid API key"
+	} else if resp.StatusCode == 403 {
+		status["error"] = "API key does not have required permissions"
+	} else {
+		body, _ := io.ReadAll(resp.Body)
+		status["error"] = fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	return status, nil
 }
 
 // validateLogData validates a log entry
@@ -176,12 +284,17 @@ func (l *Logger) sendLog(ctx context.Context, data LogData) error {
 		fmt.Printf("[%s] %s: %s\n", data.Timestamp.Format("15:04:05"), data.Level, data.Message)
 	}
 
-	// Skip HTTP request if no API key (obligatoire maintenant)
+	// Skip HTTP request if no API key
 	if l.apiKey == "" {
-		return &CheckLogsError{Type: "ConfigurationError", Message: "API key is required"}
+		err := &CheckLogsError{Type: "ConfigurationError", Message: "API key is required"}
+		// Afficher l'erreur même en mode console
+		if !l.options.Silent {
+			fmt.Printf("[CHECKLOGS ERROR] %s\n", err.Message)
+		}
+		return err
 	}
 
-	// Skip console-only mode
+	// Skip HTTP request in silent mode
 	if l.options.Silent {
 		return nil
 	}
@@ -212,18 +325,50 @@ func (l *Logger) sendLog(ctx context.Context, data LogData) error {
 	}
 	defer resp.Body.Close()
 
-	// Handle response
+	// Handle response with improved error handling
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
+		
+		var errType string
+		var shouldRetry bool
+		
+		switch resp.StatusCode {
+		case 401:
+			errType = "AuthenticationError"
+			shouldRetry = false
+		case 403:
+			errType = "AuthorizationError"
+			shouldRetry = false
+		case 429:
+			errType = "RateLimitError"
+			shouldRetry = true
+		case 400:
+			errType = "ValidationError"
+			shouldRetry = false
+		default:
+			if resp.StatusCode >= 500 {
+				errType = "ServerError"
+				shouldRetry = true
+			} else {
+				errType = "ClientError"
+				shouldRetry = false
+			}
+		}
+
 		err := &CheckLogsError{
-			Type:    "APIError",
+			Type:    errType,
 			Message: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(body)),
 			Code:    resp.StatusCode,
 		}
 
-		// Retry on server errors
-		if resp.StatusCode >= 500 || resp.StatusCode == 429 {
+		// Retry only on certain errors
+		if shouldRetry {
 			l.addToRetryQueue(data)
+		}
+
+		// Show critical errors even in console mode
+		if (errType == "AuthenticationError" || errType == "AuthorizationError") && !l.options.Silent {
+			fmt.Printf("[CHECKLOGS ERROR] %s\n", err.Message)
 		}
 
 		return err
