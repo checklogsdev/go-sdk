@@ -4,170 +4,121 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
-	"strconv"
 	"time"
 
-	"github.com/checklogsdev/go-sdk"
+	"checklogs"
 )
 
 func main() {
-	// Get API key from environment variable
+	fmt.Println("🚀 CheckLogs Go SDK - Exemple Simple")
+	fmt.Println("===================================")
+
+	// Récupérer la clé API depuis les variables d'environnement
 	apiKey := os.Getenv("CHECKLOGS_API_KEY")
 	if apiKey == "" {
-		log.Fatal("CHECKLOGS_API_KEY environment variable is required")
+		fmt.Println("⚠️  Variable CHECKLOGS_API_KEY non définie")
+		fmt.Println("   Mode démo activé (pas d'envoi réel)")
+		apiKey = "demo-key"
 	}
 
-	fmt.Println("🚀 CheckLogs Go SDK - Complete Example")
-	fmt.Println("=====================================")
+	// 1. Exemple de base
+	exempleBase(apiKey)
 
-	// Test all functionality
-	runBasicExample(apiKey)
-	runClientExample(apiKey)
-	runLoggerExample(apiKey)
-	runChildLoggerExample(apiKey)
-	runTimerExample(apiKey)
-	runErrorHandlingExample(apiKey)
-	runRetryQueueExample(apiKey)
-	runStatisticsExample(apiKey)
-	runWebApplicationExample(apiKey)
+	// 2. Logger avec options
+	exempleAvecOptions(apiKey)
 
-	fmt.Println("\n✅ All examples completed successfully!")
+	// 3. Child logger
+	exempleChildLogger(apiKey)
+
+	// 4. Timer
+	exempleTimer(apiKey)
+
+	// 5. Gestion d'erreurs
+	exempleGestionErreurs(apiKey)
+
+	// 6. Queue de retry
+	exempleRetryQueue(apiKey)
+
+	fmt.Println("\n✅ Tous les exemples terminés avec succès!")
 }
 
-// Basic logger usage
-func runBasicExample(apiKey string) {
-	fmt.Println("\n📝 1. Basic Logger Example")
-	fmt.Println("-------------------------")
+// Exemple de base
+func exempleBase(apiKey string) {
+	fmt.Println("\n📝 1. Exemple de base")
+	fmt.Println("--------------------")
 
-	// Create a basic logger
-	logger := checklogs.CreateLogger(apiKey, nil)
+	// Créer un logger simple
+	logger := checklogs.CreateLogger(apiKey)
+
 	ctx := context.Background()
 
-	// Log different levels
-	logger.Debug(ctx, "Debug message for troubleshooting")
-	logger.Info(ctx, "Application started successfully")
-	logger.Warning(ctx, "This is a warning message")
-	logger.Error(ctx, "An error occurred", map[string]interface{}{
-		"error_code": 500,
-		"component":  "database",
+	// Envoyer différents types de logs
+	logger.Debug(ctx, "Message de debug pour le développement")
+	logger.Info(ctx, "Application démarrée avec succès")
+	logger.Warning(ctx, "Attention: Espace disque faible")
+	logger.Error(ctx, "Erreur de connexion à la base de données", map[string]interface{}{
+		"error_code": "DB_CONNECTION_FAILED",
+		"retry_count": 3,
 	})
-	logger.Critical(ctx, "Critical system failure", map[string]interface{}{
+	logger.Critical(ctx, "Échec critique du système", map[string]interface{}{
+		"component": "auth_service",
 		"severity": "high",
-		"action":   "immediate_attention_required",
 	})
 
-	fmt.Println("✅ Basic logging completed")
+	fmt.Println("✅ Logs de base envoyés")
 }
 
-// Client direct usage
-func runClientExample(apiKey string) {
-	fmt.Println("\n🔧 2. Client Direct Usage Example")
-	fmt.Println("---------------------------------")
-
-	// Create client with custom options
-	options := &checklogs.ClientOptions{
-		Timeout:         15 * time.Second,
-		ValidatePayload: true,
-		BaseURL:         checklogs.DefaultBaseURL,
-	}
-
-	client := checklogs.NewCheckLogsClient(apiKey, options)
-	ctx := context.Background()
-
-	// Send log using client directly
-	logData := checklogs.LogData{
-		Message: "Direct client usage example",
-		Level:   checklogs.LogLevelInfo,
-		Source:  "example-app",
-		Context: map[string]interface{}{
-			"method":    "direct",
-			"timestamp": time.Now().Unix(),
-			"example":   true,
-		},
-	}
-
-	if err := client.Log(ctx, logData); err != nil {
-		fmt.Printf("❌ Failed to send log: %v\n", err)
-	} else {
-		fmt.Println("✅ Direct client log sent successfully")
-	}
-
-	// Try to retrieve logs (this might fail if API doesn't support it yet)
-	params := checklogs.GetLogsParams{
-		Limit: 10,
-		Level: checklogs.LogLevelInfo,
-		Since: time.Now().Add(-24 * time.Hour),
-	}
-
-	logs, err := client.GetLogs(ctx, params)
-	if err != nil {
-		fmt.Printf("⚠️  Failed to retrieve logs (might not be implemented): %v\n", err)
-	} else {
-		fmt.Printf("✅ Retrieved %d logs\n", len(logs.Data))
-	}
-}
-
-// Advanced logger configuration
-func runLoggerExample(apiKey string) {
-	fmt.Println("\n⚙️  3. Advanced Logger Configuration")
-	fmt.Println("-----------------------------------")
+// Logger avec options
+func exempleAvecOptions(apiKey string) {
+	fmt.Println("\n⚙️  2. Logger avec options")
+	fmt.Println("------------------------")
 
 	userID := int64(12345)
 
-	// Create logger with advanced options
-	options := &checklogs.LoggerOptions{
-		ClientOptions: checklogs.ClientOptions{
-			Timeout:         20 * time.Second,
-			ValidatePayload: true,
-		},
-		Source:  "advanced-example",
-		UserID:  &userID,
-		DefaultContext: map[string]interface{}{
+	// Créer un logger avec des options personnalisées
+	options := &checklogs.Options{
+		Source:        "exemple-app",
+		UserID:        &userID,
+		Context: map[string]interface{}{
 			"environment": "development",
 			"version":     "1.0.0",
-			"service":     "example-service",
+			"service":     "api-server",
 		},
-		Silent:           false,
-		ConsoleOutput:    true,
-		EnabledLevels:    []checklogs.LogLevel{checklogs.LogLevelInfo, checklogs.LogLevelError, checklogs.LogLevelCritical},
-		IncludeTimestamp: true,
-		IncludeHostname:  true,
+		ConsoleOutput: true,
+		Silent:        false,
 	}
 
-	logger := checklogs.NewCheckLogsLogger(apiKey, options)
+	logger := checklogs.NewLogger(apiKey, options)
 	ctx := context.Background()
 
-	// Log with inherited context
-	logger.Info(ctx, "Advanced logger initialized")
-	logger.Error(ctx, "Simulated error with rich context", map[string]interface{}{
-		"request_id":   generateRequestID(),
-		"user_action":  "file_upload",
-		"file_size":    1024000,
-		"error_detail": "insufficient_storage",
+	logger.Info(ctx, "Logger configuré avec options personnalisées")
+	logger.Error(ctx, "Erreur avec contexte enrichi", map[string]interface{}{
+		"request_id": "req_123456789",
+		"user_action": "login",
+		"ip_address": "192.168.1.100",
 	})
 
-	fmt.Println("✅ Advanced logger configuration completed")
+	fmt.Println("✅ Logger avec options configuré")
 }
 
-// Child logger demonstration
-func runChildLoggerExample(apiKey string) {
-	fmt.Println("\n👶 4. Child Logger Example")
-	fmt.Println("--------------------------")
+// Child logger
+func exempleChildLogger(apiKey string) {
+	fmt.Println("\n👶 3. Child Logger")
+	fmt.Println("------------------")
 
-	// Main logger with service context
-	mainLogger := checklogs.CreateLogger(apiKey, &checklogs.LoggerOptions{
+	// Logger principal
+	mainLogger := checklogs.NewLogger(apiKey, &checklogs.Options{
 		Source: "microservice",
-		DefaultContext: map[string]interface{}{
+		Context: map[string]interface{}{
 			"service": "user-management",
-			"version": "2.1.0",
+			"version": "2.0.0",
 		},
 	})
 
 	ctx := context.Background()
 
-	// Create child loggers for different modules
+	// Créer des child loggers pour différents modules
 	authLogger := mainLogger.Child(map[string]interface{}{
 		"module": "authentication",
 	})
@@ -176,468 +127,192 @@ func runChildLoggerExample(apiKey string) {
 		"module": "user-crud",
 	})
 
-	// Each child inherits parent context
-	authLogger.Info(ctx, "User authentication attempt", map[string]interface{}{
+	// Utiliser les child loggers
+	authLogger.Info(ctx, "Tentative d'authentification", map[string]interface{}{
 		"username": "john.doe",
 		"method":   "oauth2",
 	})
 
-	userLogger.Info(ctx, "User profile updated", map[string]interface{}{
+	userLogger.Info(ctx, "Profil utilisateur mis à jour", map[string]interface{}{
 		"user_id": 12345,
 		"fields":  []string{"email", "phone"},
 	})
 
-	// Create nested child logger
+	// Child logger imbriqué
 	requestLogger := authLogger.Child(map[string]interface{}{
 		"request_id": generateRequestID(),
 		"session_id": generateSessionID(),
 	})
 
-	requestLogger.Warning(ctx, "Multiple failed login attempts detected")
+	requestLogger.Warning(ctx, "Multiples tentatives de connexion échouées détectées")
 
-	fmt.Println("✅ Child logger example completed")
+	fmt.Println("✅ Child loggers utilisés avec succès")
 }
 
-// Timer functionality demonstration
-func runTimerExample(apiKey string) {
-	fmt.Println("\n⏱️  5. Timer Example")
-	fmt.Println("--------------------")
+// Timer
+func exempleTimer(apiKey string) {
+	fmt.Println("\n⏱️  4. Timer")
+	fmt.Println("------------")
 
-	logger := checklogs.CreateLogger(apiKey, &checklogs.LoggerOptions{
+	logger := checklogs.NewLogger(apiKey, &checklogs.Options{
 		Source: "timer-example",
 	})
 
-	// Simulate database operation
-	timer := logger.Time("database-query", "Executing complex database query")
+	// Simuler une opération de base de données
+	timer := logger.Time("db-query", "Exécution d'une requête de base de données")
 
-	// Simulate some work
-	simulateDatabaseWork()
+	// Simuler du travail
+	simulerTravailDB()
 
 	duration := timer.End()
-	fmt.Printf("✅ Database operation completed in %v\n", duration)
+	fmt.Printf("⏱️  Opération terminée en %v\n", duration)
 
-	// Multiple timers
-	timer1 := logger.Time("api-call", "Calling external API")
-	timer2 := logger.Time("data-processing", "Processing user data")
+	// Timers multiples
+	timer1 := logger.Time("api-call", "Appel API externe")
+	timer2 := logger.Time("data-processing", "Traitement des données")
 
-	simulateAPICall()
+	simulerAppelAPI()
 	duration1 := timer1.End()
 
-	simulateDataProcessing()
+	simulerTraitementDonnees()
 	duration2 := timer2.End()
 
-	fmt.Printf("✅ API call took %v, data processing took %v\n", duration1, duration2)
+	fmt.Printf("⏱️  Appel API: %v, Traitement: %v\n", duration1, duration2)
 }
 
-// Error handling demonstration
-func runErrorHandlingExample(apiKey string) {
-	fmt.Println("\n🚨 6. Error Handling Example")
-	fmt.Println("----------------------------")
+// Gestion d'erreurs
+func exempleGestionErreurs(apiKey string) {
+	fmt.Println("\n🚨 5. Gestion d'erreurs")
+	fmt.Println("----------------------")
 
-	logger := checklogs.CreateLogger(apiKey, &checklogs.LoggerOptions{
-		Source: "error-example",
-	})
-
+	logger := checklogs.NewLogger(apiKey, nil)
 	ctx := context.Background()
 
-	// Test with invalid data to trigger validation error
-	invalidLogger := checklogs.CreateLogger("", nil) // Empty API key
-	err := invalidLogger.Info(ctx, "This should fail")
+	// Test avec un message trop long
+	messageTropLong := make([]byte, 1025) // Dépasse la limite de 1024
+	for i := range messageTropLong {
+		messageTropLong[i] = 'A'
+	}
 
+	err := logger.Info(ctx, string(messageTropLong))
 	if err != nil {
-		handleCheckLogsError(err)
-	}
-
-	// Test with oversized message
-	oversizedMessage := make([]byte, 1025) // Over 1024 character limit
-	for i := range oversizedMessage {
-		oversizedMessage[i] = 'A'
-	}
-
-	err = logger.Info(ctx, string(oversizedMessage))
-	if err != nil {
-		handleCheckLogsError(err)
-	}
-
-	// Test with oversized context
-	oversizedContext := make(map[string]interface{})
-	largeData := make([]byte, 5001) // Over 5000 byte limit when serialized
-	for i := range largeData {
-		largeData[i] = 'X'
-	}
-	oversizedContext["large_field"] = string(largeData)
-
-	err = logger.Info(ctx, "Normal message", oversizedContext)
-	if err != nil {
-		handleCheckLogsError(err)
-	}
-
-	fmt.Println("✅ Error handling example completed")
-}
-
-// Retry queue demonstration
-func runRetryQueueExample(apiKey string) {
-	fmt.Println("\n🔄 7. Retry Queue Example")
-	fmt.Println("-------------------------")
-
-	client := checklogs.NewCheckLogsClient(apiKey, &checklogs.ClientOptions{
-		Timeout: 1 * time.Millisecond, // Very short timeout to trigger network errors
-	})
-
-	ctx := context.Background()
-
-	// Send some logs that might fail due to short timeout
-	for i := 0; i < 5; i++ {
-		logData := checklogs.LogData{
-			Message: fmt.Sprintf("Test log %d", i+1),
-			Level:   checklogs.LogLevelInfo,
-			Context: map[string]interface{}{
-				"attempt": i + 1,
-				"test":    true,
-			},
+		if checkLogsErr, ok := err.(*checklogs.CheckLogsError); ok {
+			fmt.Printf("🔴 Erreur de validation: %s\n", checkLogsErr.Message)
 		}
+	}
 
-		err := client.Log(ctx, logData)
+	// Test avec source trop longue
+	longueSource := make([]byte, 101) // Dépasse la limite de 100
+	for i := range longueSource {
+		longueSource[i] = 'B'
+	}
+
+	loggerSourceLongue := checklogs.NewLogger(apiKey, &checklogs.Options{
+		Source: string(longueSource),
+	})
+
+	err = loggerSourceLongue.Info(ctx, "Test avec source trop longue")
+	if err != nil {
+		if checkLogsErr, ok := err.(*checklogs.CheckLogsError); ok {
+			fmt.Printf("🔴 Erreur de validation: %s\n", checkLogsErr.Message)
+		}
+	}
+
+	fmt.Println("✅ Gestion d'erreurs testée")
+}
+
+// Queue de retry
+func exempleRetryQueue(apiKey string) {
+	fmt.Println("\n🔄 6. Queue de retry")
+	fmt.Println("-------------------")
+
+	// Créer un logger avec timeout très court pour forcer les erreurs
+	logger := checklogs.NewLogger(apiKey, &checklogs.Options{
+		Source:  "retry-test",
+		Timeout: 1 * time.Millisecond, // Timeout très court
+	})
+
+	ctx := context.Background()
+
+	// Envoyer des logs qui vont probablement échouer
+	for i := 0; i < 3; i++ {
+		err := logger.Info(ctx, fmt.Sprintf("Log de test %d", i+1), map[string]interface{}{
+			"attempt": i + 1,
+			"test":    true,
+		})
+
 		if err != nil {
-			fmt.Printf("⚠️  Log %d failed (expected): %v\n", i+1, err)
+			fmt.Printf("⚠️  Log %d a échoué (attendu): %v\n", i+1, err)
 		}
 	}
 
-	// Check retry queue status
-	status := client.GetRetryQueueStatus()
-	fmt.Printf("📊 Retry queue status: %d logs pending\n", status.Count)
+	// Vérifier la taille de la queue
+	queueSize := logger.GetRetryQueueSize()
+	fmt.Printf("📊 Taille de la queue de retry: %d\n", queueSize)
 
-	// Create a new client with normal timeout for flushing
-	normalClient := checklogs.NewCheckLogsClient(apiKey, nil)
-	
-	// Move failed logs to normal client (in real scenario, you'd use the same client)
-	// This is just for demonstration
-	flushCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Créer un nouveau logger avec timeout normal pour flush
+	normalLogger := checklogs.NewLogger(apiKey, &checklogs.Options{
+		Source: "retry-flush",
+	})
+
+	// Simuler un flush (en réalité, on ne peut pas transférer la queue)
+	flushCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	success := normalClient.Flush(flushCtx)
-	fmt.Printf("✅ Flush result: %t\n", success)
+	success := normalLogger.FlushRetryQueue(flushCtx)
+	fmt.Printf("✅ Flush terminé, %d logs envoyés avec succès\n", success)
 
-	// Clear retry queue
-	client.ClearRetryQueue()
-	fmt.Println("✅ Retry queue cleared")
+	// Nettoyer la queue
+	logger.ClearRetryQueue()
+	fmt.Printf("🧹 Queue nettoyée, nouvelle taille: %d\n", logger.GetRetryQueueSize())
 }
 
-// Statistics demonstration
-func runStatisticsExample(apiKey string) {
-	fmt.Println("\n📊 8. Statistics Example")
-	fmt.Println("------------------------")
-
-	client := checklogs.NewCheckLogsClient(apiKey, nil)
-	ctx := context.Background()
-
-	// Try to get statistics (might not be implemented yet)
-	stats, err := client.GetStats(ctx)
-	if err != nil {
-		fmt.Printf("⚠️  Failed to get stats (might not be implemented): %v\n", err)
-	} else {
-		fmt.Printf("📈 Total logs: %d\n", stats.TotalLogs)
-		fmt.Printf("📈 Error rate: %.2f%%\n", stats.ErrorRate)
-		fmt.Printf("📈 Last log: %v\n", stats.LastLog)
-	}
-
-	// Try to get summary
-	summary, err := client.GetSummary(ctx)
-	if err != nil {
-		fmt.Printf("⚠️  Failed to get summary (might not be implemented): %v\n", err)
-	} else {
-		fmt.Printf("📊 Analytics error rate: %.2f%%\n", summary.Data.Analytics.ErrorRate)
-		fmt.Printf("📊 Trend: %s\n", summary.Data.Analytics.Trend)
-		fmt.Printf("📊 Peak day: %s\n", summary.Data.Analytics.PeakDay)
-	}
-
-	// Try individual metrics
-	errorRate, err := client.GetErrorRate(ctx)
-	if err != nil {
-		fmt.Printf("⚠️  Failed to get error rate: %v\n", err)
-	} else {
-		fmt.Printf("📉 Current error rate: %.2f%%\n", errorRate)
-	}
-
-	fmt.Println("✅ Statistics example completed")
-}
-
-// Web application simulation
-func runWebApplicationExample(apiKey string) {
-	fmt.Println("\n🌐 9. Web Application Simulation")
-	fmt.Println("--------------------------------")
-
-	// Simulate a web application with request logging
-	appLogger := checklogs.CreateLogger(apiKey, &checklogs.LoggerOptions{
-		Source: "web-app",
-		DefaultContext: map[string]interface{}{
-			"application": "ecommerce-api",
-			"environment": "production",
-		},
-	})
-
-	// Simulate handling multiple requests
-	for i := 1; i <= 3; i++ {
-		simulateWebRequest(appLogger, i)
-	}
-
-	fmt.Println("✅ Web application simulation completed")
-}
-
-// Helper functions
+// Fonctions utilitaires
 
 func generateRequestID() string {
-	return fmt.Sprintf("req_%d_%d", time.Now().Unix(), rand.Intn(10000))
+	return fmt.Sprintf("req_%d", time.Now().UnixNano())
 }
 
 func generateSessionID() string {
-	return fmt.Sprintf("sess_%d_%d", time.Now().Unix(), rand.Intn(10000))
+	return fmt.Sprintf("sess_%d", time.Now().UnixNano())
 }
 
-func simulateDatabaseWork() {
+func simulerTravailDB() {
 	time.Sleep(100 * time.Millisecond)
 }
 
-func simulateAPICall() {
+func simulerAppelAPI() {
 	time.Sleep(200 * time.Millisecond)
 }
 
-func simulateDataProcessing() {
+func simulerTraitementDonnees() {
 	time.Sleep(150 * time.Millisecond)
 }
 
-func handleCheckLogsError(err error) {
-	switch e := err.(type) {
-	case *checklogs.APIError:
-		fmt.Printf("🔴 API Error: %d - %s\n", e.StatusCode, e.Message)
-		if e.IsAuthError() {
-			fmt.Println("   → Authentication problem detected")
-		} else if e.IsRateLimitError() {
-			fmt.Println("   → Rate limit exceeded")
-		}
-
-	case *checklogs.NetworkError:
-		fmt.Printf("🌐 Network Error: %s\n", e.Message)
-		if e.IsTimeoutError() {
-			fmt.Println("   → Request timed out")
-		}
-
-	case *checklogs.ValidationError:
-		fmt.Printf("✋ Validation Error on field '%s': %s\n", e.Field, e.Message)
-
-	default:
-		fmt.Printf("❓ Unknown error: %v\n", err)
-	}
-}
-
-func simulateWebRequest(logger *checklogs.CheckLogsLogger, requestNum int) {
-	ctx := context.Background()
-
-	// Create request-specific logger
-	requestID := generateRequestID()
-	userID := int64(1000 + requestNum)
-
-	requestLogger := logger.Child(map[string]interface{}{
-		"request_id": requestID,
-		"user_id":    userID,
-		"endpoint":   "/api/users/profile",
-		"method":     "GET",
-	})
-
-	// Start request timer
-	timer := requestLogger.Time("request-processing", fmt.Sprintf("Processing request %d", requestNum))
-
-	// Log request start
-	requestLogger.Info(ctx, "Request received", map[string]interface{}{
-		"ip":         fmt.Sprintf("192.168.1.%d", 100+requestNum),
-		"user_agent": "CheckLogs-Go-SDK-Example/1.0",
-	})
-
-	// Simulate some processing
-	time.Sleep(time.Duration(50+requestNum*10) * time.Millisecond)
-
-	// Simulate authentication
-	authLogger := requestLogger.Child(map[string]interface{}{
-		"component": "auth",
-	})
-
-	authLogger.Debug(ctx, "Validating user token")
-
-	// Simulate database query
-	dbLogger := requestLogger.Child(map[string]interface{}{
-		"component": "database",
-	})
-
-	dbTimer := dbLogger.Time("db-query", "Fetching user profile")
-	time.Sleep(30 * time.Millisecond)
-	dbDuration := dbTimer.End()
-
-	dbLogger.Info(ctx, "User profile retrieved", map[string]interface{}{
-		"query_time_ms": dbDuration.Milliseconds(),
-		"records_found": 1,
-	})
-
-	// Simulate potential error for request 2
-	if requestNum == 2 {
-		requestLogger.Error(ctx, "Temporary service unavailable", map[string]interface{}{
-			"error_code": "SERVICE_UNAVAILABLE",
-			"retry_after": 5,
-		})
-	} else {
-		// Successful response
-		requestLogger.Info(ctx, "Request completed successfully", map[string]interface{}{
-			"status_code": 200,
-			"response_size": 1024 + requestNum*100,
-		})
-	}
-
-	// End request timer
-	totalDuration := timer.End()
-
-	// Log request summary
-	requestLogger.Info(ctx, "Request finished", map[string]interface{}{
-		"total_duration_ms": totalDuration.Milliseconds(),
-		"status": func() string {
-			if requestNum == 2 {
-				return "error"
-			}
-			return "success"
-		}(),
-	})
-
-	fmt.Printf("   🌐 Request %d completed in %v\n", requestNum, totalDuration)
-}
-
-// Benchmark function (not called in main, but useful for testing)
-func benchmarkLogging(apiKey string, numLogs int) {
-	fmt.Printf("\n🏃 Running benchmark with %d logs\n", numLogs)
-
-	logger := checklogs.CreateLogger(apiKey, &checklogs.LoggerOptions{
-		ConsoleOutput: false, // Disable console output for benchmark
-		Silent:        false,
-	})
-
-	ctx := context.Background()
-	start := time.Now()
-
-	for i := 0; i < numLogs; i++ {
-		logger.Info(ctx, fmt.Sprintf("Benchmark log %d", i+1), map[string]interface{}{
-			"index":     i + 1,
-			"benchmark": true,
-			"timestamp": time.Now().Unix(),
-		})
-	}
-
-	duration := time.Since(start)
-	logsPerSecond := float64(numLogs) / duration.Seconds()
-
-	fmt.Printf("✅ Benchmark completed: %d logs in %v (%.2f logs/sec)\n", 
-		numLogs, duration, logsPerSecond)
-}
-
-// Performance test function
-func performanceTest(apiKey string) {
-	fmt.Println("\n⚡ Performance Test")
-	fmt.Println("-------------------")
-
-	// Test with different batch sizes
-	batchSizes := []int{10, 100, 500}
-
-	for _, size := range batchSizes {
-		benchmarkLogging(apiKey, size)
-	}
-}
-
-// Stress test function
-func stressTest(apiKey string) {
-	fmt.Println("\n💪 Stress Test")
-	fmt.Println("---------------")
-
-	logger := checklogs.CreateLogger(apiKey, nil)
-	ctx := context.Background()
-
-	// Create multiple goroutines to test concurrency
-	numGoroutines := 10
-	logsPerGoroutine := 50
-
-	start := time.Now()
-	var wg sync.WaitGroup
-
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-
-			workerLogger := logger.Child(map[string]interface{}{
-				"worker_id": workerID,
-			})
-
-			for j := 0; j < logsPerGoroutine; j++ {
-				workerLogger.Info(ctx, fmt.Sprintf("Concurrent log from worker %d", workerID), map[string]interface{}{
-					"log_index": j + 1,
-					"stress_test": true,
-				})
-			}
-		}(i)
-	}
-
-	wg.Wait()
-	duration := time.Since(start)
-
-	totalLogs := numGoroutines * logsPerGoroutine
-	logsPerSecond := float64(totalLogs) / duration.Seconds()
-
-	fmt.Printf("✅ Stress test completed: %d logs from %d goroutines in %v (%.2f logs/sec)\n", 
-		totalLogs, numGoroutines, duration, logsPerSecond)
-}
-
-// Main function with CLI arguments support
+// Fonction principale alternative avec arguments
 func init() {
-	// Initialize random seed
-	rand.Seed(time.Now().UnixNano())
-}
-
-// Additional CLI support (uncomment and modify main() to use)
-/*
-func main() {
-	apiKey := os.Getenv("CHECKLOGS_API_KEY")
-	if apiKey == "" {
-		log.Fatal("CHECKLOGS_API_KEY environment variable is required")
-	}
-
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "basic":
-			runBasicExample(apiKey)
-		case "performance":
-			performanceTest(apiKey)
-		case "stress":
-			stressTest(apiKey)
-		case "benchmark":
-			if len(os.Args) > 2 {
-				if numLogs, err := strconv.Atoi(os.Args[2]); err == nil {
-					benchmarkLogging(apiKey, numLogs)
-				} else {
-					fmt.Println("Invalid number of logs for benchmark")
-				}
+	// Fonction pour tester avec une clé API spécifique
+	if len(os.Args) > 1 && os.Args[1] == "test-key" {
+		if len(os.Args) > 2 {
+			testKey := os.Args[2]
+			fmt.Printf("🔑 Test avec la clé API: %s...\n", testKey[:min(len(testKey), 10)])
+			
+			logger := checklogs.CreateLogger(testKey)
+			ctx := context.Background()
+			
+			err := logger.Info(ctx, "Test de connexion avec clé API fournie")
+			if err != nil {
+				log.Printf("❌ Erreur de test: %v", err)
 			} else {
-				benchmarkLogging(apiKey, 1000)
+				fmt.Println("✅ Test de connexion réussi")
 			}
-		default:
-			fmt.Println("Available commands: basic, performance, stress, benchmark [num_logs]")
 		}
-	} else {
-		// Run all examples
-		runBasicExample(apiKey)
-		runClientExample(apiKey)
-		runLoggerExample(apiKey)
-		runChildLoggerExample(apiKey)
-		runTimerExample(apiKey)
-		runErrorHandlingExample(apiKey)
-		runRetryQueueExample(apiKey)
-		runStatisticsExample(apiKey)
-		runWebApplicationExample(apiKey)
-		fmt.Println("\n✅ All examples completed successfully!")
 	}
 }
-*/
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

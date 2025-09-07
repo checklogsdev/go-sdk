@@ -14,76 +14,6 @@ import (
 	"time"
 )
 
-// HTTPClient interface for HTTP operations (allows for mocking in tests)
-type HTTPClient interface {
-	Do(req *http.Request) (*http.Response, error)
-}
-
-// RetryQueue interface for managing retry operations
-type RetryQueue interface {
-	Add(data LogData)
-	GetAll() []LogData
-	Clear()
-	Size() int
-}
-
-// StatsManager interface for managing statistics
-type StatsManager interface {
-	IncrementLogs()
-	IncrementErrors()
-	GetStats() Stats
-}
-
-// Custom error types
-
-// APIError represents an API-related error
-type APIError struct {
-	StatusCode int    `json:"status_code"`
-	Message    string `json:"message"`
-	Response   string `json:"response"`
-}
-
-func (e *APIError) Error() string {
-	return fmt.Sprintf("API Error %d: %s", e.StatusCode, e.Message)
-}
-
-// IsAuthError returns true if this is an authentication error
-func (e *APIError) IsAuthError() bool {
-	return e.StatusCode == 401 || e.StatusCode == 403
-}
-
-// IsRateLimitError returns true if this is a rate limit error
-func (e *APIError) IsRateLimitError() bool {
-	return e.StatusCode == 429
-}
-
-// NetworkError represents a network-related error
-type NetworkError struct {
-	Message string `json:"message"`
-	Cause   error  `json:"cause"`
-}
-
-func (e *NetworkError) Error() string {
-	return fmt.Sprintf("Network Error: %s", e.Message)
-}
-
-// IsTimeoutError returns true if this is a timeout error
-func (e *NetworkError) IsTimeoutError() bool {
-	return e.Cause != nil &&
-		(e.Cause == context.DeadlineExceeded ||
-			e.Cause.Error() == "timeout")
-}
-
-// ValidationError represents a validation error
-type ValidationError struct {
-	Field   string `json:"field"`
-	Message string `json:"message"`
-}
-
-func (e *ValidationError) Error() string {
-	return fmt.Sprintf("Validation Error on field '%s': %s", e.Field, e.Message)
-}
-
 // Internal implementations
 
 // retryQueue implements RetryQueue
@@ -126,10 +56,10 @@ func (rq *retryQueue) Size() int {
 
 // statsManager implements StatsManager
 type statsManager struct {
-	totalLogs  int64
+	totalLogs   int64
 	totalErrors int64
-	lastLog    time.Time
-	mutex      sync.RWMutex
+	lastLog     time.Time
+	mutex       sync.RWMutex
 }
 
 func newStatsManager() StatsManager {
@@ -152,12 +82,12 @@ func (sm *statsManager) IncrementErrors() {
 func (sm *statsManager) GetStats() Stats {
 	sm.mutex.RLock()
 	defer sm.mutex.RUnlock()
-	
+
 	errorRate := 0.0
 	if sm.totalLogs > 0 {
 		errorRate = float64(sm.totalErrors) / float64(sm.totalLogs) * 100
 	}
-	
+
 	return Stats{
 		TotalLogs: sm.totalLogs,
 		LastLog:   sm.lastLog,
@@ -298,27 +228,27 @@ func (c *CheckLogsClient) sendLog(ctx context.Context, data LogData) error {
 func (c *CheckLogsClient) getLogs(ctx context.Context, params GetLogsParams) (*LogsResponse, error) {
 	// Build query parameters
 	queryParams := url.Values{}
-	
+
 	if params.Limit > 0 {
 		queryParams.Set("limit", strconv.Itoa(params.Limit))
 	}
-	
+
 	if params.Level != "" {
 		queryParams.Set("level", string(params.Level))
 	}
-	
+
 	if !params.Since.IsZero() {
 		queryParams.Set("since", params.Since.Format(time.RFC3339))
 	}
-	
+
 	if !params.Until.IsZero() {
 		queryParams.Set("until", params.Until.Format(time.RFC3339))
 	}
-	
+
 	if params.Source != "" {
 		queryParams.Set("source", params.Source)
 	}
-	
+
 	if params.UserID != nil {
 		queryParams.Set("user_id", strconv.FormatInt(*params.UserID, 10))
 	}
@@ -688,15 +618,15 @@ func exponentialBackoff(attempt int, baseDelay time.Duration) time.Duration {
 	if attempt <= 0 {
 		return baseDelay
 	}
-	
+
 	// Cap at 30 seconds maximum
 	maxDelay := 30 * time.Second
 	delay := baseDelay * time.Duration(1<<uint(attempt))
-	
+
 	if delay > maxDelay {
 		return maxDelay
 	}
-	
+
 	return delay
 }
 
@@ -714,81 +644,17 @@ func isRetriableError(err error) bool {
 	}
 }
 
-// formatLogLevel formats a log level for display
-func formatLogLevel(level LogLevel) string {
-	switch level {
-	case LogLevelDebug:
-		return "DEBUG"
-	case LogLevelInfo:
-		return "INFO"
-	case LogLevelWarning:
-		return "WARN"
-	case LogLevelError:
-		return "ERROR"
-	case LogLevelCritical:
-		return "CRIT"
-	default:
-		return string(level)
-	}
-}
-
 // validateAPIKey validates the format of an API key
 func validateAPIKey(apiKey string) error {
 	if apiKey == "" {
 		return &ValidationError{Field: "api_key", Message: "API key is required"}
 	}
-	
+
 	if len(apiKey) < 10 {
 		return &ValidationError{Field: "api_key", Message: "API key appears to be invalid (too short)"}
 	}
-	
+
 	return nil
-}
-
-// mergeContexts merges multiple context maps, with later maps taking precedence
-func mergeContexts(contexts ...map[string]interface{}) map[string]interface{} {
-	if len(contexts) == 0 {
-		return nil
-	}
-	
-	merged := make(map[string]interface{})
-	for _, ctx := range contexts {
-		if ctx != nil {
-			for k, v := range ctx {
-				merged[k] = v
-			}
-		}
-	}
-	
-	if len(merged) == 0 {
-		return nil
-	}
-	
-	return merged
-}
-
-// getDefaultEnabledLevels returns the default enabled log levels
-func getDefaultEnabledLevels() []LogLevel {
-	return []LogLevel{
-		LogLevelDebug,
-		LogLevelInfo,
-		LogLevelWarning,
-		LogLevelError,
-		LogLevelCritical,
-	}
-}
-
-// isValidLogLevel checks if a log level is valid
-func isValidLogLevel(level LogLevel) bool {
-	validLevels := map[LogLevel]bool{
-		LogLevelDebug:    true,
-		LogLevelInfo:     true,
-		LogLevelWarning:  true,
-		LogLevelError:    true,
-		LogLevelCritical: true,
-	}
-	
-	return validLevels[level]
 }
 
 // truncateString truncates a string to a maximum length
@@ -796,146 +662,10 @@ func truncateString(s string, maxLength int) string {
 	if len(s) <= maxLength {
 		return s
 	}
-	
+
 	if maxLength <= 3 {
 		return s[:maxLength]
 	}
-	
+
 	return s[:maxLength-3] + "..."
-}
-
-// getContextSize calculates the size of a context map when JSON serialized
-func getContextSize(context map[string]interface{}) int {
-	if context == nil {
-		return 0
-	}
-	
-	jsonBytes, err := json.Marshal(context)
-	if err != nil {
-		return 0
-	}
-	
-	return len(jsonBytes)
-}
-
-// addProcessInfo adds process information to the context
-func addProcessInfo(context map[string]interface{}) {
-	if context == nil {
-		return
-	}
-	
-	context["process_id"] = os.Getpid()
-	context["go_version"] = fmt.Sprintf("go%s", os.Getenv("GO_VERSION"))
-}
-
-// addTimestampToContext adds a timestamp to the context if not already present
-func addTimestampToContext(context map[string]interface{}) {
-	if context == nil {
-		return
-	}
-	
-	if _, exists := context["timestamp"]; !exists {
-		context["timestamp"] = time.Now().Unix()
-	}
-}
-
-// cleanupContext removes empty or nil values from context
-func cleanupContext(context map[string]interface{}) map[string]interface{} {
-	if context == nil {
-		return nil
-	}
-	
-	cleaned := make(map[string]interface{})
-	for k, v := range context {
-		if v != nil {
-			// Check for empty strings
-			if str, ok := v.(string); ok && str == "" {
-				continue
-			}
-			
-			// Check for empty slices
-			if slice, ok := v.([]interface{}); ok && len(slice) == 0 {
-				continue
-			}
-			
-			// Check for empty maps
-			if m, ok := v.(map[string]interface{}); ok && len(m) == 0 {
-				continue
-			}
-			
-			cleaned[k] = v
-		}
-	}
-	
-	if len(cleaned) == 0 {
-		return nil
-	}
-	
-	return cleaned
-}
-
-// validateURL validates a URL format
-func validateURL(urlStr string) error {
-	if urlStr == "" {
-		return &ValidationError{Field: "url", Message: "URL cannot be empty"}
-	}
-	
-	parsedURL, err := url.Parse(urlStr)
-	if err != nil {
-		return &ValidationError{Field: "url", Message: "invalid URL format"}
-	}
-	
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return &ValidationError{Field: "url", Message: "URL must use http or https scheme"}
-	}
-	
-	return nil
-}
-
-// setDefaultTimeout sets a default timeout if none is provided
-func setDefaultTimeout(timeout time.Duration) time.Duration {
-	if timeout <= 0 {
-		return DefaultTimeout
-	}
-	return timeout
-}
-
-// buildHeaders builds common HTTP headers for requests
-func buildHeaders(apiKey string) map[string]string {
-	return map[string]string{
-		"Content-Type":  "application/json",
-		"Authorization": "Bearer " + apiKey,
-		"User-Agent":    buildUserAgent(),
-		"Accept":        "application/json",
-	}
-}
-
-// parseTimeParam parses a time parameter from various formats
-func parseTimeParam(timeStr string) (time.Time, error) {
-	if timeStr == "" {
-		return time.Time{}, nil
-	}
-	
-	// Try RFC3339 format first
-	if t, err := time.Parse(time.RFC3339, timeStr); err == nil {
-		return t, nil
-	}
-	
-	// Try other common formats
-	formats := []string{
-		"2006-01-02T15:04:05Z",
-		"2006-01-02 15:04:05",
-		"2006-01-02",
-	}
-	
-	for _, format := range formats {
-		if t, err := time.Parse(format, timeStr); err == nil {
-			return t, nil
-		}
-	}
-	
-	return time.Time{}, &ValidationError{
-		Field:   "time",
-		Message: fmt.Sprintf("unable to parse time: %s", timeStr),
-	}
 }

@@ -1,35 +1,35 @@
-// Package checklogs provides a Go SDK for CheckLogs.dev
-// Official Go SDK for CheckLogs.dev - A powerful log monitoring system.
+// Package checklogs provides a simple Go SDK for CheckLogs.dev
 package checklogs
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"sync"
 	"time"
 )
 
 const (
-	// Version of the CheckLogs Go SDK
-	Version = "1.0.0"
-	
-	// DefaultBaseURL is the default API endpoint
-	DefaultBaseURL = "https://checklogs.dev/api/logs"
-	
-	// DefaultTimeout is the default request timeout
-	DefaultTimeout = 30 * time.Second
+	Version    = "1.0.0"
+	DefaultURL = "https://checklogs.dev/api/logs"
 )
 
 // LogLevel represents the severity level of a log entry
 type LogLevel string
 
 const (
-	LogLevelDebug    LogLevel = "debug"
-	LogLevelInfo     LogLevel = "info"
-	LogLevelWarning  LogLevel = "warning"
-	LogLevelError    LogLevel = "error"
-	LogLevelCritical LogLevel = "critical"
+	Debug    LogLevel = "debug"
+	Info     LogLevel = "info"
+	Warning  LogLevel = "warning"
+	Error    LogLevel = "error"
+	Critical LogLevel = "critical"
 )
 
-// LogData represents a log entry to be sent to CheckLogs
+// LogData represents a log entry
 type LogData struct {
 	Message   string                 `json:"message"`
 	Level     LogLevel               `json:"level"`
@@ -40,213 +40,333 @@ type LogData struct {
 	Hostname  string                 `json:"hostname,omitempty"`
 }
 
-// ClientOptions represents configuration options for CheckLogsClient
-type ClientOptions struct {
-	Timeout         time.Duration `json:"timeout"`
-	ValidatePayload bool          `json:"validate_payload"`
-	BaseURL         string        `json:"base_url"`
+// Options represents configuration for the logger
+type Options struct {
+	Source        string                 `json:"source"`
+	UserID        *int64                 `json:"user_id"`
+	Context       map[string]interface{} `json:"default_context"`
+	Silent        bool                   `json:"silent"`
+	ConsoleOutput bool                   `json:"console_output"`
+	BaseURL       string                 `json:"base_url"`
+	Timeout       time.Duration          `json:"timeout"`
 }
 
-// LoggerOptions represents configuration options for CheckLogsLogger
-type LoggerOptions struct {
-	ClientOptions
-	Source           string                 `json:"source"`
-	UserID           *int64                 `json:"user_id"`
-	DefaultContext   map[string]interface{} `json:"default_context"`
-	Silent           bool                   `json:"silent"`
-	ConsoleOutput    bool                   `json:"console_output"`
-	EnabledLevels    []LogLevel             `json:"enabled_levels"`
-	IncludeTimestamp bool                   `json:"include_timestamp"`
-	IncludeHostname  bool                   `json:"include_hostname"`
-}
-
-// CheckLogsClient is the main client for the CheckLogs API
-type CheckLogsClient struct {
+// Logger represents the CheckLogs logger
+type Logger struct {
 	apiKey     string
-	options    ClientOptions
-	httpClient HTTPClient
-	retryQueue RetryQueue
-	stats      StatsManager
+	options    Options
+	httpClient *http.Client
+	retryQueue []LogData
+	mutex      sync.RWMutex
 }
 
-// CheckLogsLogger provides advanced logging functionality with convenience methods
-type CheckLogsLogger struct {
-	client         *CheckLogsClient
-	options        LoggerOptions
-	defaultContext map[string]interface{}
-}
-
-// Timer represents a timing operation for measuring execution time
+// Timer represents a timing operation
 type Timer struct {
-	start    time.Time
-	name     string
-	message  string
-	logger   *CheckLogsLogger
+	start   time.Time
+	name    string
+	message string
+	logger  *Logger
 }
 
-// Stats represents basic statistics data
-type Stats struct {
-	TotalLogs int64     `json:"total_logs"`
-	LastLog   time.Time `json:"last_log"`
-	ErrorRate float64   `json:"error_rate"`
+// Custom error types
+type CheckLogsError struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+	Code    int    `json:"code,omitempty"`
 }
 
-// Summary represents analytics summary data
-type Summary struct {
-	Data struct {
-		Analytics struct {
-			ErrorRate float64 `json:"error_rate"`
-			Trend     string  `json:"trend"`
-			PeakDay   string  `json:"peak_day"`
-		} `json:"analytics"`
-	} `json:"data"`
+func (e *CheckLogsError) Error() string {
+	return fmt.Sprintf("[%s] %s", e.Type, e.Message)
 }
 
-// RetryQueueStatus represents the status of the retry queue
-type RetryQueueStatus struct {
-	Count      int       `json:"count"`
-	LastRetry  time.Time `json:"last_retry,omitempty"`
-	NextRetry  time.Time `json:"next_retry,omitempty"`
-	Failed     int       `json:"failed"`
-	Successful int       `json:"successful"`
+// NewLogger creates a new CheckLogs logger
+func NewLogger(apiKey string, opts *Options) *Logger {
+	// Set default options
+	options := Options{
+		ConsoleOutput: true,
+		BaseURL:       DefaultURL,
+		Timeout:       30 * time.Second,
+	}
+
+	// Override with provided options
+	if opts != nil {
+		if opts.Source != "" {
+			options.Source = opts.Source
+		}
+		if opts.UserID != nil {
+			options.UserID = opts.UserID
+		}
+		if opts.Context != nil {
+			options.Context = opts.Context
+		}
+		options.Silent = opts.Silent
+		options.ConsoleOutput = opts.ConsoleOutput
+		if opts.BaseURL != "" {
+			options.BaseURL = opts.BaseURL
+		}
+		if opts.Timeout > 0 {
+			options.Timeout = opts.Timeout
+		}
+	}
+
+	return &Logger{
+		apiKey:     apiKey,
+		options:    options,
+		httpClient: &http.Client{Timeout: options.Timeout},
+		retryQueue: make([]LogData, 0),
+	}
 }
 
-// GetLogsParams represents parameters for retrieving logs
-type GetLogsParams struct {
-	Limit  int       `json:"limit,omitempty"`
-	Level  LogLevel  `json:"level,omitempty"`
-	Since  time.Time `json:"since,omitempty"`
-	Until  time.Time `json:"until,omitempty"`
-	Source string    `json:"source,omitempty"`
-	UserID *int64    `json:"user_id,omitempty"`
+// CreateLogger is a convenience function to create a logger with minimal config
+func CreateLogger(apiKey string) *Logger {
+	return NewLogger(apiKey, nil)
 }
 
-// LogsResponse represents the response when retrieving logs
-type LogsResponse struct {
-	Data []LogData `json:"data"`
-	Meta struct {
-		Total      int  `json:"total"`
-		Page       int  `json:"page"`
-		PerPage    int  `json:"per_page"`
-		HasMore    bool `json:"has_more"`
-		NextCursor *string `json:"next_cursor"`
-	} `json:"meta"`
+// validateLogData validates a log entry
+func (l *Logger) validateLogData(data *LogData) error {
+	if data.Message == "" {
+		return &CheckLogsError{Type: "ValidationError", Message: "message is required"}
+	}
+	if len(data.Message) > 1024 {
+		return &CheckLogsError{Type: "ValidationError", Message: "message too long (max 1024 characters)"}
+	}
+	if data.Source != "" && len(data.Source) > 100 {
+		return &CheckLogsError{Type: "ValidationError", Message: "source too long (max 100 characters)"}
+	}
+	return nil
 }
 
-// NewCheckLogsClient creates a new CheckLogs client with the specified API key and options
-func NewCheckLogsClient(apiKey string, options *ClientOptions) *CheckLogsClient {
-	return newCheckLogsClient(apiKey, options)
+// sendLog sends a log entry to CheckLogs
+func (l *Logger) sendLog(ctx context.Context, data LogData) error {
+	// Set defaults
+	if data.Timestamp.IsZero() {
+		data.Timestamp = time.Now()
+	}
+	if data.Source == "" && l.options.Source != "" {
+		data.Source = l.options.Source
+	}
+	if data.UserID == nil && l.options.UserID != nil {
+		data.UserID = l.options.UserID
+	}
+
+	// Add hostname
+	if hostname, err := os.Hostname(); err == nil {
+		data.Hostname = hostname
+	}
+
+	// Merge default context
+	if l.options.Context != nil {
+		if data.Context == nil {
+			data.Context = make(map[string]interface{})
+		}
+		for k, v := range l.options.Context {
+			if _, exists := data.Context[k]; !exists {
+				data.Context[k] = v
+			}
+		}
+	}
+
+	// Validate
+	if err := l.validateLogData(&data); err != nil {
+		return err
+	}
+
+	// Console output
+	if l.options.ConsoleOutput && !l.options.Silent {
+		fmt.Printf("[%s] %s: %s\n", data.Timestamp.Format("15:04:05"), data.Level, data.Message)
+	}
+
+	// Skip HTTP request if silent mode or no API key
+	if l.options.Silent || l.apiKey == "" {
+		return nil
+	}
+
+	// Prepare JSON
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return &CheckLogsError{Type: "SerializationError", Message: err.Error()}
+	}
+
+	// Create request
+	req, err := http.NewRequestWithContext(ctx, "POST", l.options.BaseURL+"/api/logs", bytes.NewBuffer(jsonData))
+	if err != nil {
+		l.addToRetryQueue(data)
+		return &CheckLogsError{Type: "NetworkError", Message: err.Error()}
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+l.apiKey)
+	req.Header.Set("User-Agent", "CheckLogs-Go-SDK/"+Version)
+
+	// Send request
+	resp, err := l.httpClient.Do(req)
+	if err != nil {
+		l.addToRetryQueue(data)
+		return &CheckLogsError{Type: "NetworkError", Message: err.Error()}
+	}
+	defer resp.Body.Close()
+
+	// Handle response
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		err := &CheckLogsError{
+			Type:    "APIError",
+			Message: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(body)),
+			Code:    resp.StatusCode,
+		}
+
+		// Retry on server errors
+		if resp.StatusCode >= 500 || resp.StatusCode == 429 {
+			l.addToRetryQueue(data)
+		}
+
+		return err
+	}
+
+	return nil
 }
 
-// NewCheckLogsLogger creates a new CheckLogs logger with the specified API key and options
-func NewCheckLogsLogger(apiKey string, options *LoggerOptions) *CheckLogsLogger {
-	return newCheckLogsLogger(apiKey, options)
+// addToRetryQueue adds a log to the retry queue
+func (l *Logger) addToRetryQueue(data LogData) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.retryQueue = append(l.retryQueue, data)
 }
 
-// CreateLogger is a convenience function to create a logger with default options
-func CreateLogger(apiKey string, options *LoggerOptions) *CheckLogsLogger {
-	return NewCheckLogsLogger(apiKey, options)
+// GetRetryQueueSize returns the number of logs in the retry queue
+func (l *Logger) GetRetryQueueSize() int {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+	return len(l.retryQueue)
 }
 
-// Client methods
+// FlushRetryQueue attempts to send all logs in the retry queue
+func (l *Logger) FlushRetryQueue(ctx context.Context) int {
+	l.mutex.Lock()
+	queue := make([]LogData, len(l.retryQueue))
+	copy(queue, l.retryQueue)
+	l.retryQueue = l.retryQueue[:0] // Clear queue
+	l.mutex.Unlock()
 
-// Log sends a log entry to CheckLogs
-func (c *CheckLogsClient) Log(ctx context.Context, data LogData) error {
-	return c.sendLog(ctx, data)
+	success := 0
+	for _, data := range queue {
+		if err := l.sendLog(ctx, data); err == nil {
+			success++
+		}
+	}
+	return success
 }
 
-// GetLogs retrieves logs from CheckLogs based on the provided parameters
-func (c *CheckLogsClient) GetLogs(ctx context.Context, params GetLogsParams) (*LogsResponse, error) {
-	return c.getLogs(ctx, params)
+// ClearRetryQueue clears the retry queue
+func (l *Logger) ClearRetryQueue() {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.retryQueue = l.retryQueue[:0]
 }
 
-// GetStats retrieves basic statistics from CheckLogs
-func (c *CheckLogsClient) GetStats(ctx context.Context) (*Stats, error) {
-	return c.getStats(ctx)
-}
-
-// GetSummary retrieves analytics summary from CheckLogs
-func (c *CheckLogsClient) GetSummary(ctx context.Context) (*Summary, error) {
-	return c.getSummary(ctx)
-}
-
-// GetErrorRate retrieves the current error rate
-func (c *CheckLogsClient) GetErrorRate(ctx context.Context) (float64, error) {
-	return c.getErrorRate(ctx)
-}
-
-// GetTrend retrieves the current trend information
-func (c *CheckLogsClient) GetTrend(ctx context.Context) (string, error) {
-	return c.getTrend(ctx)
-}
-
-// GetPeakDay retrieves the peak day information
-func (c *CheckLogsClient) GetPeakDay(ctx context.Context) (string, error) {
-	return c.getPeakDay(ctx)
-}
-
-// GetRetryQueueStatus returns the current status of the retry queue
-func (c *CheckLogsClient) GetRetryQueueStatus() RetryQueueStatus {
-	return c.getRetryQueueStatus()
-}
-
-// Flush waits for all pending logs in the retry queue to be sent
-func (c *CheckLogsClient) Flush(ctx context.Context) bool {
-	return c.flush(ctx)
-}
-
-// ClearRetryQueue clears all pending logs from the retry queue
-func (c *CheckLogsClient) ClearRetryQueue() {
-	c.clearRetryQueue()
-}
-
-// Logger methods
+// Log methods for different levels
 
 // Debug logs a debug message
-func (l *CheckLogsLogger) Debug(ctx context.Context, message string, context ...map[string]interface{}) error {
-	return l.log(ctx, LogLevelDebug, message, mergeContext(context...))
+func (l *Logger) Debug(ctx context.Context, message string, context ...map[string]interface{}) error {
+	return l.log(ctx, Debug, message, context...)
 }
 
 // Info logs an info message
-func (l *CheckLogsLogger) Info(ctx context.Context, message string, context ...map[string]interface{}) error {
-	return l.log(ctx, LogLevelInfo, message, mergeContext(context...))
+func (l *Logger) Info(ctx context.Context, message string, context ...map[string]interface{}) error {
+	return l.log(ctx, Info, message, context...)
 }
 
 // Warning logs a warning message
-func (l *CheckLogsLogger) Warning(ctx context.Context, message string, context ...map[string]interface{}) error {
-	return l.log(ctx, LogLevelWarning, message, mergeContext(context...))
+func (l *Logger) Warning(ctx context.Context, message string, context ...map[string]interface{}) error {
+	return l.log(ctx, Warning, message, context...)
 }
 
 // Error logs an error message
-func (l *CheckLogsLogger) Error(ctx context.Context, message string, context ...map[string]interface{}) error {
-	return l.log(ctx, LogLevelError, message, mergeContext(context...))
+func (l *Logger) Error(ctx context.Context, message string, context ...map[string]interface{}) error {
+	return l.log(ctx, Error, message, context...)
 }
 
 // Critical logs a critical message
-func (l *CheckLogsLogger) Critical(ctx context.Context, message string, context ...map[string]interface{}) error {
-	return l.log(ctx, LogLevelCritical, message, mergeContext(context...))
+func (l *Logger) Critical(ctx context.Context, message string, context ...map[string]interface{}) error {
+	return l.log(ctx, Critical, message, context...)
 }
 
-// Child creates a child logger with inherited context
-func (l *CheckLogsLogger) Child(context map[string]interface{}) *CheckLogsLogger {
-	return l.createChild(context)
+// log is the internal logging method
+func (l *Logger) log(ctx context.Context, level LogLevel, message string, contexts ...map[string]interface{}) error {
+	data := LogData{
+		Message: message,
+		Level:   level,
+	}
+
+	// Merge contexts
+	if len(contexts) > 0 {
+		data.Context = make(map[string]interface{})
+		for _, ctx := range contexts {
+			if ctx != nil {
+				for k, v := range ctx {
+					data.Context[k] = v
+				}
+			}
+		}
+	}
+
+	return l.sendLog(ctx, data)
+}
+
+// Child creates a child logger with additional context
+func (l *Logger) Child(context map[string]interface{}) *Logger {
+	newContext := make(map[string]interface{})
+
+	// Copy parent context
+	if l.options.Context != nil {
+		for k, v := range l.options.Context {
+			newContext[k] = v
+		}
+	}
+
+	// Add child context
+	if context != nil {
+		for k, v := range context {
+			newContext[k] = v
+		}
+	}
+
+	// Create child options
+	childOptions := l.options
+	childOptions.Context = newContext
+
+	return &Logger{
+		apiKey:     l.apiKey,
+		options:    childOptions,
+		httpClient: l.httpClient,
+		retryQueue: make([]LogData, 0),
+	}
 }
 
 // Time creates a timer for measuring execution time
-func (l *CheckLogsLogger) Time(name, message string) *Timer {
-	return l.createTimer(name, message)
+func (l *Logger) Time(name, message string) *Timer {
+	return &Timer{
+		start:   time.Now(),
+		name:    name,
+		message: message,
+		logger:  l,
+	}
 }
-
-// GetClient returns the underlying CheckLogsClient
-func (l *CheckLogsLogger) GetClient() *CheckLogsClient {
-	return l.client
-}
-
-// Timer methods
 
 // End ends the timer and logs the duration
 func (t *Timer) End() time.Duration {
-	return t.endTimer()
+	duration := time.Since(t.start)
+
+	ctx := context.Background()
+	context := map[string]interface{}{
+		"operation":   t.name,
+		"duration_ms": duration.Milliseconds(),
+	}
+
+	t.logger.Info(ctx, fmt.Sprintf("%s completed in %v", t.message, duration), context)
+
+	return duration
 }
 
 // GetDuration returns the current duration without ending the timer
@@ -254,24 +374,21 @@ func (t *Timer) GetDuration() time.Duration {
 	return time.Since(t.start)
 }
 
-// Helper function to merge multiple context maps
-func mergeContext(contexts ...map[string]interface{}) map[string]interface{} {
-	if len(contexts) == 0 {
-		return nil
+// IsValidLevel checks if a log level is valid
+func IsValidLevel(level LogLevel) bool {
+	switch level {
+	case Debug, Info, Warning, Error, Critical:
+		return true
+	default:
+		return false
 	}
-	
-	if len(contexts) == 1 {
-		return contexts[0]
+}
+
+// ParseLevel parses a string into a LogLevel
+func ParseLevel(s string) (LogLevel, error) {
+	level := LogLevel(s)
+	if IsValidLevel(level) {
+		return level, nil
 	}
-	
-	merged := make(map[string]interface{})
-	for _, ctx := range contexts {
-		if ctx != nil {
-			for k, v := range ctx {
-				merged[k] = v
-			}
-		}
-	}
-	
-	return merged
+	return "", &CheckLogsError{Type: "ValidationError", Message: "invalid log level: " + s}
 }
