@@ -1,417 +1,233 @@
-# CheckLogs Go SDK
+# CheckLogs Go SDK - Version Simple
 
-[![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/checklogsdev/go-sdk)](https://goreportcard.com/report/github.com/checklogsdev/go-sdk)
+SDK Go simple pour [CheckLogs.dev](https://checklogs.dev) - Système de monitoring de logs.
 
-Official Go SDK for [CheckLogs.dev](https://checklogs.dev) - A powerful log monitoring system.
+## 🚀 Installation et Setup Local
 
-## Features
-
-- ✅ **Complete API Coverage** - Full support for logging, retrieval, and analytics
-- ✅ **High Performance** - Optimized for high-throughput applications
-- ✅ **Automatic Retry** - Built-in retry mechanism with exponential backoff
-- ✅ **Context Support** - Full Go context support for cancellation and timeouts
-- ✅ **Enhanced Logging** - Rich metadata including hostname, process info, and timestamps
-- ✅ **Child Loggers** - Create loggers with inherited context
-- ✅ **Timer Support** - Built-in execution time measurement
-- ✅ **Statistics** - Comprehensive analytics and metrics
-- ✅ **Error Handling** - Detailed error types with helper methods
-- ✅ **Thread Safe** - Safe for concurrent use
-- ✅ **Validation** - Automatic data validation and sanitization
-
-## Installation
+### 1. Créer le projet
 
 ```bash
-go get github.com/checklogsdev/go-sdk
+# Créer le répertoire
+mkdir checklogs-go-sdk
+cd checklogs-go-sdk
+
+# Créer les fichiers (voir structure ci-dessous)
 ```
 
-## Quick Start
+### 2. Structure des fichiers
 
-### Basic Usage
+```
+checklogs-go-sdk/
+├── go.mod           # Configuration du module
+├── checklogs.go     # Code principal du SDK
+├── README.md        # Ce fichier
+└── examples/
+    └── basic.go     # Exemple complet
+```
+
+### 3. Initialiser le module
+
+```bash
+# Initialiser le module Go
+go mod init checklogs
+
+# Télécharger les dépendances
+go mod tidy
+```
+
+### 4. Tester le module
+
+```bash
+# Test simple (sans clé API)
+go run examples/basic.go
+
+# Test avec votre clé API
+set CHECKLOGS_API_KEY=your-api-key-here
+go run examples/basic.go
+
+# Ou sur Linux/Mac
+export CHECKLOGS_API_KEY=your-api-key-here
+go run examples/basic.go
+```
+
+## 📖 Utilisation
+
+### Usage basique
 
 ```go
 package main
 
 import (
     "context"
-    "log"
-    
-    "github.com/checklogsdev/go-sdk"
+    "checklogs"
 )
 
 func main() {
-    // Create a logger
-    logger := checklogs.CreateLogger("your-api-key-here", nil)
+    // Créer un logger
+    logger := checklogs.CreateLogger("your-api-key")
     
     ctx := context.Background()
     
-    // Log messages
-    logger.Info(ctx, "Application started")
-    logger.Error(ctx, "Something went wrong", map[string]interface{}{
+    // Envoyer des logs
+    logger.Info(ctx, "Application démarrée")
+    logger.Error(ctx, "Une erreur s'est produite", map[string]interface{}{
         "error_code": 500,
-        "user_id":    123,
+        "component": "database",
     })
 }
 ```
 
-### Using the Client Directly
+### Logger avec options
 
 ```go
-package main
+userID := int64(123)
 
-import (
-    "context"
-    "fmt"
-    "log"
-    
-    "github.com/checklogsdev/go-sdk"
-)
-
-func main() {
-    // Create a client
-    client := checklogs.NewCheckLogsClient("your-api-key", nil)
-    
-    ctx := context.Background()
-    
-    // Send a log
-    logData := checklogs.LogData{
-        Message: "User logged in",
-        Level:   checklogs.LogLevelInfo,
-        Context: map[string]interface{}{
-            "user_id": 123,
-            "ip":      "192.168.1.1",
-        },
-    }
-    
-    if err := client.Log(ctx, logData); err != nil {
-        log.Printf("Failed to send log: %v", err)
-    }
-    
-    // Retrieve logs
-    params := checklogs.GetLogsParams{
-        Limit: 100,
-        Level: checklogs.LogLevelError,
-    }
-    
-    logs, err := client.GetLogs(ctx, params)
-    if err != nil {
-        log.Printf("Failed to retrieve logs: %v", err)
-        return
-    }
-    
-    fmt.Printf("Retrieved %d logs\n", len(logs.Data))
-}
-```
-
-## Configuration
-
-### Client Options
-
-```go
-options := &checklogs.ClientOptions{
-    Timeout:         30 * time.Second,  // Request timeout
-    ValidatePayload: true,              // Validate data before sending
-    BaseURL:         "https://api.checklogs.dev", // Custom API endpoint
-}
-
-client := checklogs.NewCheckLogsClient("api-key", options)
-```
-
-### Logger Options
-
-```go
-options := &checklogs.LoggerOptions{
-    // Client options
-    ClientOptions: checklogs.ClientOptions{
-        Timeout:         30 * time.Second,
-        ValidatePayload: true,
-    },
-    
-    // Logger-specific options
-    Source:           "my-app",                    // Default source
-    UserID:           &userID,                     // Default user ID
-    DefaultContext:   map[string]interface{}{      // Default context
-        "environment": "production",
-        "version":     "1.0.0",
-    },
-    Silent:           false,                       // Suppress all output
-    ConsoleOutput:    true,                        // Also log to console
-    EnabledLevels:    []checklogs.LogLevel{        // Enabled log levels
-        checklogs.LogLevelInfo,
-        checklogs.LogLevelError,
-    },
-    IncludeTimestamp: true,                        // Add timestamp to context
-    IncludeHostname:  true,                        // Add hostname to context
-}
-
-logger := checklogs.NewCheckLogsLogger("api-key", options)
-```
-
-## Usage Examples
-
-### Child Loggers
-
-Create child loggers with inherited context:
-
-```go
-// Main logger with service context
-mainLogger := checklogs.CreateLogger("api-key", &checklogs.LoggerOptions{
-    DefaultContext: map[string]interface{}{
-        "service": "api",
+options := &checklogs.Options{
+    Source:        "mon-app",
+    UserID:        &userID,
+    Context: map[string]interface{}{
         "version": "1.0.0",
+        "env": "production",
     },
-})
+    ConsoleOutput: true,
+}
 
-// Child logger for user module
+logger := checklogs.NewLogger("your-api-key", options)
+```
+
+### Child Logger
+
+```go
+// Logger principal
+mainLogger := checklogs.CreateLogger("your-api-key")
+
+// Child logger avec contexte spécifique
 userLogger := mainLogger.Child(map[string]interface{}{
     "module": "user",
+    "request_id": "req_123",
 })
 
-// Child logger for order module  
-orderLogger := mainLogger.Child(map[string]interface{}{
-    "module": "orders",
-})
-
-ctx := context.Background()
-
-// Each child inherits parent context
-userLogger.Info(ctx, "User created")   // Context: {service: "api", version: "1.0.0", module: "user"}
-orderLogger.Error(ctx, "Order failed") // Context: {service: "api", version: "1.0.0", module: "orders"}
+userLogger.Info(ctx, "Utilisateur connecté")
 ```
 
-### Timing Operations
-
-Measure execution time:
+### Timer pour mesurer les performances
 
 ```go
-logger := checklogs.CreateLogger("api-key", nil)
+logger := checklogs.CreateLogger("your-api-key")
 
-// Start timer
-timer := logger.Time("db-query", "Executing database query")
+// Démarrer un timer
+timer := logger.Time("db-query", "Requête base de données")
 
-// ... your code here ...
+// ... votre code ...
 
-// End timer (automatically logs duration)
+// Terminer et logger la durée
 duration := timer.End()
-fmt.Printf("Operation took %v\n", duration)
 ```
 
-### Error Handling
+## 🛠️ Commandes utiles
 
-The SDK provides specific error types:
+```bash
+# Compiler le projet
+go build
+
+# Lancer les tests
+go test
+
+# Formater le code
+go fmt
+
+# Lancer l'exemple
+go run examples/basic.go
+
+# Lancer avec une clé API spécifique
+go run examples/basic.go test-key your-actual-api-key
+```
+
+## 📋 Niveaux de log disponibles
+
+- `checklogs.Debug` - Messages de debug
+- `checklogs.Info` - Informations générales
+- `checklogs.Warning` - Avertissements
+- `checklogs.Error` - Erreurs
+- `checklogs.Critical` - Erreurs critiques
+
+## 🔧 Configuration
+
+### Options disponibles
 
 ```go
-import (
-    "context"
-    "errors"
-    "fmt"
-    
-    "github.com/checklogsdev/go-sdk"
-)
+type Options struct {
+    Source        string                 // Source des logs
+    UserID        *int64                 // ID utilisateur par défaut
+    Context       map[string]interface{} // Contexte par défaut
+    Silent        bool                   // Mode silencieux (pas d'envoi HTTP)
+    ConsoleOutput bool                   // Affichage console (défaut: true)
+    BaseURL       string                 // URL de l'API (défaut: CheckLogs)
+    Timeout       time.Duration          // Timeout HTTP (défaut: 30s)
+}
+```
 
-func handleLogging() {
-    logger := checklogs.CreateLogger("api-key", nil)
-    ctx := context.Background()
-    
-    err := logger.Info(ctx, "Test message")
-    if err != nil {
-        var apiErr *checklogs.APIError
-        var netErr *checklogs.NetworkError
-        var valErr *checklogs.ValidationError
-        
-        switch {
-        case errors.As(err, &apiErr):
-            fmt.Printf("API error: %d - %s\n", apiErr.StatusCode, apiErr.Message)
-            if apiErr.IsAuthError() {
-                fmt.Println("Authentication problem")
-            } else if apiErr.IsRateLimitError() {
-                fmt.Println("Rate limit exceeded")
-            }
-            
-        case errors.As(err, &netErr):
-            fmt.Printf("Network error: %s\n", netErr.Message)
-            if netErr.IsTimeoutError() {
-                fmt.Println("Request timed out")
-            }
-            
-        case errors.As(err, &valErr):
-            fmt.Printf("Validation error on %s: %s\n", valErr.Field, valErr.Message)
+### Variables d'environnement
+
+- `CHECKLOGS_API_KEY` - Votre clé API CheckLogs
+
+## 🚨 Gestion d'erreurs
+
+Le SDK retourne des erreurs typées :
+
+```go
+err := logger.Info(ctx, "test")
+if err != nil {
+    if checkLogsErr, ok := err.(*checklogs.CheckLogsError); ok {
+        switch checkLogsErr.Type {
+        case "ValidationError":
+            // Erreur de validation
+        case "NetworkError":
+            // Erreur réseau
+        case "APIError":
+            // Erreur API (HTTP 4xx/5xx)
         }
     }
 }
 ```
 
-### Retry Queue Management
+## 🔄 Queue de retry
 
-The logger automatically retries failed requests:
-
-```go
-client := checklogs.NewCheckLogsClient("api-key", nil)
-
-// Check retry queue status
-status := client.GetRetryQueueStatus()
-fmt.Printf("%d logs pending retry\n", status.Count)
-
-// Wait for all logs to be sent
-ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-defer cancel()
-
-success := client.Flush(ctx)
-if success {
-    fmt.Println("All logs sent successfully")
-} else {
-    fmt.Println("Some logs failed to send")
-}
-
-// Clear retry queue if needed
-client.ClearRetryQueue()
-```
-
-### Statistics and Analytics
+Le SDK gère automatiquement les échecs temporaires :
 
 ```go
-client := checklogs.NewCheckLogsClient("api-key", nil)
-ctx := context.Background()
+// Vérifier la taille de la queue
+size := logger.GetRetryQueueSize()
 
-// Get basic statistics
-stats, err := client.GetStats(ctx)
-if err == nil {
-    fmt.Printf("Total logs: %d\n", stats.TotalLogs)
-    fmt.Printf("Error rate: %.2f%%\n", stats.ErrorRate)
-}
+// Forcer l'envoi des logs en attente
+success := logger.FlushRetryQueue(ctx)
 
-// Get analytics summary
-summary, err := client.GetSummary(ctx)
-if err == nil {
-    fmt.Printf("Error rate: %.2f%%\n", summary.Data.Analytics.ErrorRate)
-    fmt.Printf("Trend: %s\n", summary.Data.Analytics.Trend)
-    fmt.Printf("Peak day: %s\n", summary.Data.Analytics.PeakDay)
-}
-
-// Get specific metrics
-errorRate, err := client.GetErrorRate(ctx)
-trend, err := client.GetTrend(ctx)
-peakDay, err := client.GetPeakDay(ctx)
+// Nettoyer la queue
+logger.ClearRetryQueue()
 ```
 
-## Log Levels
+## 📊 Exemples d'intégration
 
-Supported log levels (in order of severity):
-
-- `LogLevelDebug` - Development and troubleshooting information
-- `LogLevelInfo` - General application flow
-- `LogLevelWarning` - Potentially harmful situations
-- `LogLevelError` - Error events that might still allow the application to continue
-- `LogLevelCritical` - Very severe error events that might cause the application to abort
-
-## Data Validation
-
-The SDK automatically validates and sanitizes data:
-
-- **Message**: Required, max 1024 characters
-- **Level**: Must be valid level, defaults to 'info'
-- **Source**: Max 100 characters
-- **Context**: Objects only, max 5000 characters when serialized
-- **User ID**: Must be a valid int64
-
-## Best Practices
-
-### Batch Operations
-Use child loggers for related operations:
-
-```go
-mainLogger := checklogs.CreateLogger("api-key", nil)
-requestLogger := mainLogger.Child(map[string]interface{}{
-    "request_id": generateRequestID(),
-    "user_id":    userID,
-})
-
-// Use requestLogger for all operations in this request
-```
-
-### Level Filtering
-Only enable necessary log levels in production:
-
-```go
-logger := checklogs.NewCheckLogsLogger("api-key", &checklogs.LoggerOptions{
-    EnabledLevels: []checklogs.LogLevel{
-        checklogs.LogLevelInfo,
-        checklogs.LogLevelError,
-        checklogs.LogLevelCritical,
-    },
-})
-```
-
-### Context Size
-Keep context objects reasonably small:
-
-```go
-// Good
-context := map[string]interface{}{
-    "user_id": 123,
-    "action":  "login",
-}
-
-// Avoid large objects
-// context := map[string]interface{}{
-//     "large_data": hugeStruct,
-// }
-```
-
-### Error Handling
-Always handle potential network issues:
-
-```go
-ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-defer cancel()
-
-if err := logger.Info(ctx, "Message"); err != nil {
-    // Handle error appropriately
-    log.Printf("Failed to send log: %v", err)
-}
-```
-
-### Graceful Shutdown
-Call `Flush()` before application termination:
-
-```go
-func gracefulShutdown(client *checklogs.CheckLogsClient) {
-    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-    defer cancel()
-    
-    if !client.Flush(ctx) {
-        log.Println("Warning: Some logs may not have been sent")
-    }
-}
-```
-
-## Web Framework Integration
-
-### Gin Integration
+### Application web avec Gin
 
 ```go
 package main
 
 import (
     "github.com/gin-gonic/gin"
-    "github.com/checklogsdev/go-sdk"
+    "checklogs"
 )
 
 func main() {
-    logger := checklogs.CreateLogger("your-api-key", &checklogs.LoggerOptions{
-        Source: "web-api",
-    })
-    
+    logger := checklogs.CreateLogger("your-api-key")
     r := gin.Default()
     
-    // Logging middleware
+    // Middleware de logging
     r.Use(func(c *gin.Context) {
         requestLogger := logger.Child(map[string]interface{}{
-            "request_id": c.GetHeader("X-Request-ID"),
-            "method":     c.Request.Method,
-            "path":       c.Request.URL.Path,
-            "ip":         c.ClientIP(),
+            "method": c.Request.Method,
+            "path": c.Request.URL.Path,
+            "ip": c.ClientIP(),
         })
         
         c.Set("logger", requestLogger)
@@ -419,16 +235,13 @@ func main() {
     })
     
     r.GET("/users/:id", func(c *gin.Context) {
-        logger := c.MustGet("logger").(*checklogs.CheckLogsLogger)
+        logger := c.MustGet("logger").(*checklogs.Logger)
         userID := c.Param("id")
         
-        logger.Info(c.Request.Context(), "Fetching user", map[string]interface{}{
+        logger.Info(c.Request.Context(), "Récupération utilisateur", map[string]interface{}{
             "user_id": userID,
         })
         
-        // ... your logic here ...
-        
-        logger.Info(c.Request.Context(), "User fetched successfully")
         c.JSON(200, gin.H{"user": "data"})
     })
     
@@ -436,85 +249,137 @@ func main() {
 }
 ```
 
-### Echo Integration
+### Traitement de tâches en arrière-plan
 
 ```go
-package main
-
-import (
-    "github.com/labstack/echo/v4"
-    "github.com/checklogsdev/go-sdk"
-)
-
-func main() {
-    logger := checklogs.CreateLogger("your-api-key", nil)
+func processJob(jobID string) {
+    logger := checklogs.CreateLogger("your-api-key")
     
-    e := echo.New()
-    
-    // Logging middleware
-    e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-        return func(c echo.Context) error {
-            requestLogger := logger.Child(map[string]interface{}{
-                "request_id": c.Request().Header.Get("X-Request-ID"),
-                "method":     c.Request().Method,
-                "path":       c.Request().URL.Path,
-            })
-            
-            c.Set("logger", requestLogger)
-            return next(c)
-        }
+    jobLogger := logger.Child(map[string]interface{}{
+        "job_id": jobID,
+        "worker": "background-processor",
     })
     
-    e.Start(":8080")
+    timer := jobLogger.Time("job-processing", "Traitement de la tâche")
+    
+    ctx := context.Background()
+    jobLogger.Info(ctx, "Début du traitement")
+    
+    // ... traitement ...
+    
+    duration := timer.End()
+    jobLogger.Info(ctx, "Tâche terminée", map[string]interface{}{
+        "status": "completed",
+        "duration_seconds": duration.Seconds(),
+    })
 }
 ```
 
-## Testing
+## ⚡ Tests de performance
 
-### Running Tests
-
-```bash
-go test ./...
-```
-
-### Coverage
+Le SDK inclut des exemples de tests de performance :
 
 ```bash
-go test -cover ./...
+# Test avec 1000 logs
+go run examples/basic.go benchmark 1000
+
+# Test de concurrence
+go run examples/basic.go stress
 ```
 
-### Benchmarks
+## 🐛 Debug et développement
 
+### Mode debug
+
+```go
+// Logger en mode silencieux pour les tests
+logger := checklogs.NewLogger("", &checklogs.Options{
+    Silent: true,  // Pas d'envoi HTTP
+    ConsoleOutput: true,  // Affichage console uniquement
+})
+```
+
+### Validation des logs
+
+```go
+// Tester la validation
+err := logger.Info(ctx, strings.Repeat("A", 1025)) // Message trop long
+if err != nil {
+    fmt.Printf("Erreur de validation: %v\n", err)
+}
+```
+
+## 📋 Checklist de déploiement
+
+- [ ] Clé API CheckLogs configurée
+- [ ] Tests unitaires passent (`go test`)
+- [ ] Code formaté (`go fmt`)
+- [ ] Pas d'erreurs de compilation (`go build`)
+- [ ] Logs de test envoyés avec succès
+- [ ] Gestion d'erreurs testée
+- [ ] Queue de retry fonctionnelle
+
+## 🔧 Troubleshooting
+
+### Problèmes courants
+
+**1. "API key is required"**
 ```bash
-go test -bench=. ./...
+# Vérifier que la variable d'environnement est définie
+echo $CHECKLOGS_API_KEY  # Linux/Mac
+echo %CHECKLOGS_API_KEY%  # Windows
 ```
 
-## Contributing
+**2. "Network Error"**
+- Vérifier la connexion internet
+- Vérifier le timeout (augmenter si nécessaire)
+- Vérifier l'URL de l'API
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+**3. "Message too long"**
+- Les messages sont limités à 1024 caractères
+- Tronquer ou diviser les messages longs
 
-## License
+**4. "Source too long"**
+- La source est limitée à 100 caractères
+- Utiliser des noms courts et descriptifs
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### Logs de debug
 
-## Support
+Pour voir les détails des requêtes HTTP, vous pouvez temporairement modifier le code pour ajouter du debug :
 
-- **Documentation**: [https://docs.checklogs.dev](https://docs.checklogs.dev)
-- **Issues**: [GitHub Issues](https://github.com/checklogsdev/go-sdk/issues)
-- **Email**: [support@checklogs.dev](mailto:support@checklogs.dev)
+```go
+// Dans sendLog(), avant l.httpClient.Do(req)
+fmt.Printf("Envoi vers: %s\n", req.URL.String())
+fmt.Printf("Headers: %v\n", req.Header)
+```
 
-## Changelog
+## 📝 Changelog
 
-### v1.0.0
-- Initial release
-- Complete API coverage
-- Automatic retry mechanism
-- Child loggers support
-- Timer functionality
-- Comprehensive error handling
-- Statistics and analytics
-- Thread-safe operations
+### v1.0.0 (Version initiale)
+- Logger de base avec niveaux multiples
+- Support des contextes et métadonnées
+- Child loggers
+- Timers pour mesures de performance
+- Queue de retry automatique
+- Gestion d'erreurs typées
+- Mode silencieux pour développement
+- Validation des données
+
+## 🤝 Contribution
+
+Pour contribuer au développement :
+
+1. Forker le repository
+2. Créer une branche feature
+3. Tester les modifications
+4. Créer une pull request
+
+## 📄 License
+
+MIT License - Voir le fichier LICENSE pour les détails.
+
+## 📞 Support
+
+- Documentation: [https://docs.checklogs.dev](https://docs.checklogs.dev)
+- Issues: GitHub Issues
+- Email: [support@checklogs.dev](mailto:support@checklogs.dev)
