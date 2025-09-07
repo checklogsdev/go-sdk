@@ -15,7 +15,7 @@ import (
 
 const (
 	Version    = "1.0.0"
-	DefaultURL = "https://checklogs.dev/api/logs"
+	DefaultURL = "https://api.checklogs.dev"
 )
 
 // LogLevel represents the severity level of a log entry
@@ -176,8 +176,13 @@ func (l *Logger) sendLog(ctx context.Context, data LogData) error {
 		fmt.Printf("[%s] %s: %s\n", data.Timestamp.Format("15:04:05"), data.Level, data.Message)
 	}
 
-	// Skip HTTP request if silent mode or no API key
-	if l.options.Silent || l.apiKey == "" {
+	// Skip HTTP request if no API key (obligatoire maintenant)
+	if l.apiKey == "" {
+		return &CheckLogsError{Type: "ConfigurationError", Message: "API key is required"}
+	}
+
+	// Skip console-only mode
+	if l.options.Silent {
 		return nil
 	}
 

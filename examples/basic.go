@@ -291,22 +291,11 @@ func simulerTraitementDonnees() {
 
 // Fonction principale alternative avec arguments
 func init() {
-	// Fonction pour tester avec une clé API spécifique
-	if len(os.Args) > 1 && os.Args[1] == "test-key" {
-		if len(os.Args) > 2 {
-			testKey := os.Args[2]
-			fmt.Printf("🔑 Test avec la clé API: %s...\n", testKey[:min(len(testKey), 10)])
-			
-			logger := checklogs.CreateLogger(testKey)
-			ctx := context.Background()
-			
-			err := logger.Info(ctx, "Test de connexion avec clé API fournie")
-			if err != nil {
-				log.Printf("❌ Erreur de test: %v", err)
-			} else {
-				fmt.Println("✅ Test de connexion réussi")
-			}
-		}
+	// Test avec clé API fournie en argument
+	if len(os.Args) > 1 && os.Args[1] == "test-key" && len(os.Args) > 2 {
+		testKey := os.Args[2]
+		os.Setenv("CHECKLOGS_API_KEY", testKey)
+		fmt.Printf("🔑 Test avec clé API: %s...\n", testKey[:min(len(testKey), 10)])
 	}
 }
 
