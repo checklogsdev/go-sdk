@@ -10,22 +10,6 @@ Official Go SDK for [CheckLogs.dev](https://checklogs.dev) - A powerful log moni
 go get github.com/checklogsdev/go-sdk
 ```
 
-For a guided setup, you can run our quick-start example:
-
-```bash
-# Set your API key
-export CHECKLOGS_API_KEY=your-api-key-here
-
-# Run the example
-go run github.com/checklogsdev/go-sdk/examples/basic.go
-```
-
-This will:
-- Test your API key connection
-- Show basic logging functionality  
-- Demonstrate advanced features
-- Provide next steps to get you started
-
 ## Basic Usage
 
 ```go
