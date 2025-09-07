@@ -1,0 +1,138 @@
+# CheckLogs Go SDK - Linting Configuration
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters-settings:
+  goimports:
+    local-prefixes: github.com/checklogsdev/go-sdk
+
+  golint:
+    min-confidence: 0.8
+
+  gofmt:
+    simplify: true
+
+  govet:
+    check-shadowing: true
+
+  misspell:
+    locale: US
+
+  lll:
+    line-length: 120
+
+  gocritic:
+    enabled-tags:
+      - performance
+      - style
+      - experimental
+    disabled-checks:
+      - wrapperFunc
+
+  cyclop:
+    max-complexity: 15
+
+  funlen:
+    lines: 60
+    statements: 40
+
+  gocognit:
+    min-complexity: 15
+
+  nestif:
+    min-complexity: 4
+
+linters:
+  enable:
+    - bodyclose
+    - cyclop
+    - dogsled
+    - dupl
+    - durationcheck
+    - errcheck
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - funlen
+    - gochecknoinits
+    - gocognit
+    - goconst
+    - gocritic
+    - gofmt
+    - goimports
+    - golint
+    - gomnd
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - nestif
+    - nolintlint
+    - prealloc
+    - staticcheck
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+
+  disable:
+    - deadcode
+    - structcheck
+    - varcheck
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gosec
+        - dupl
+        - funlen
+        - gocognit
+        - cyclop
+
+    # Exclude some specific warnings
+    - text: "weak cryptographic primitive"
+      linters:
+        - gosec
+
+    # Exclude magic number warnings in tests
+    - path: _test\.go
+      text: "Magic number"
+      linters:
+        - gomnd
+
+    # Exclude long lines in examples
+    - path: examples/
+      linters:
+        - lll
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+
+severity:
+  default-severity: error
+  case-sensitive: false
+  rules:
+    - linters:
+        - dupl
+      severity: info
+    - linters:
+        - gocritic
+      severity: warning
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: true
