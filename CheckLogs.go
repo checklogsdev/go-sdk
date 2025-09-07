@@ -15,7 +15,7 @@ import (
 
 const (
 	Version    = "1.0.0"
-	DefaultURL = "https://api.checklogs.dev"
+	DefaultURL = "https://checklogs.dev"
 )
 
 // LogLevel represents the severity level of a log entry
