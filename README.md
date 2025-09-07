@@ -7,7 +7,7 @@
 Official Go SDK for [CheckLogs.dev](https://checklogs.dev) - A powerful log monitoring system.
 
 ```bash
-go get github.com/checklogsdev/checklogs-go-sdk
+go get github.com/checklogsdev/go-sdk
 ```
 
 For a guided setup, you can run our quick-start example:
@@ -17,7 +17,7 @@ For a guided setup, you can run our quick-start example:
 export CHECKLOGS_API_KEY=your-api-key-here
 
 # Run the example
-go run github.com/checklogsdev/checklogs-go-sdk/examples/basic.go
+go run github.com/checklogsdev/go-sdk/examples/basic.go
 ```
 
 This will:
@@ -33,7 +33,7 @@ package main
 
 import (
     "context"
-    "github.com/checklogsdev/checklogs-go-sdk"
+    "github.com/checklogsdev/go-sdk"
 )
 
 func main() {
@@ -82,7 +82,7 @@ package main
 
 import (
     "context"
-    "github.com/checklogsdev/checklogs-go-sdk"
+    "github.com/checklogsdev/go-sdk"
 )
 
 func main() {
@@ -106,7 +106,7 @@ package main
 import (
     "context"
     "time"
-    "github.com/checklogsdev/checklogs-go-sdk"
+    "github.com/checklogsdev/go-sdk"
 )
 
 func main() {
@@ -159,7 +159,7 @@ package main
 
 import (
     "context"
-    "github.com/checklogsdev/checklogs-go-sdk"
+    "github.com/checklogsdev/go-sdk"
 )
 
 func main() {
@@ -196,7 +196,7 @@ package main
 import (
     "context"
     "time"
-    "github.com/checklogsdev/checklogs-go-sdk"
+    "github.com/checklogsdev/go-sdk"
 )
 
 func main() {
@@ -224,7 +224,7 @@ package main
 import (
     "context"
     "fmt"
-    "github.com/checklogsdev/checklogs-go-sdk"
+    "github.com/checklogsdev/go-sdk"
 )
 
 func main() {
@@ -259,7 +259,7 @@ package main
 import (
     "context"
     "fmt"
-    "github.com/checklogsdev/checklogs-go-sdk"
+    "github.com/checklogsdev/go-sdk"
 )
 
 func main() {
@@ -365,7 +365,7 @@ package main
 
 import (
     "github.com/gin-gonic/gin"
-    "github.com/checklogsdev/checklogs-go-sdk"
+    "github.com/checklogsdev/go-sdk"
 )
 
 func main() {
@@ -411,7 +411,7 @@ package main
 
 import (
     "github.com/labstack/echo/v4"
-    "github.com/checklogsdev/checklogs-go-sdk"
+    "github.com/checklogsdev/go-sdk"
 )
 
 func main() {
@@ -444,7 +444,7 @@ package main
 
 import (
     "context"
-    "github.com/checklogsdev/checklogs-go-sdk"
+    "github.com/checklogsdev/go-sdk"
 )
 
 func processJob(jobID string) {
@@ -477,5 +477,5 @@ Note: The SDK supports Go 1.21 and above. Use standard `import` statements as sh
 **License**: MIT
 
 **Documentation**: [https://docs.checklogs.dev](https://docs.checklogs.dev)  
-**Issues**: [GitHub Issues](https://github.com/checklogsdev/checklogs-go-sdk/issues)  
+**Issues**: [GitHub Issues](https://github.com/checklogsdev/go-sdk/issues)  
 **Email**: [contact@loggersimple.com](mailto:contact@loggersimple.com)
